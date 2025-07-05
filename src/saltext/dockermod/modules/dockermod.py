@@ -17,11 +17,11 @@ Management of Docker Containers
 .. _docker-py: https://pypi.python.org/pypi/docker-py
 .. _lxc-attach: https://linuxcontainers.org/lxc/manpages/man1/lxc-attach.1.html
 .. _nsenter: http://man7.org/linux/man-pages/man1/nsenter.1.html
-.. _docker-exec: http://docs.docker.com/reference/commandline/cli/#exec
+.. _docker-exec: https://docs.docker.com/reference/cli/docker/container/exec/
 .. _`docker-py Low-level API`: http://docker-py.readthedocs.io/en/stable/api.html
 .. _timelib: https://pypi.python.org/pypi/timelib
 .. _`trusted builds`: https://blog.docker.com/2013/11/introducing-trusted-builds/
-.. _`Docker Engine API`: https://docs.docker.com/engine/api/v1.33/#operation/ContainerCreate
+.. _`Docker Engine API`: https://docs.docker.com/reference/api/engine/version/v1.33/#tag/Container/operation/ContainerCreate
 
 .. note::
     Older releases of the Python bindings for Docker were called docker-py_ in
@@ -216,14 +216,26 @@ import salt.client.ssh.state
 import salt.exceptions
 import salt.fileclient
 import salt.pillar
-import salt.utils.dockermod.translate.container
-import salt.utils.dockermod.translate.network
+import salt.utils.args
 import salt.utils.functools
+import salt.utils.hashutils
 import salt.utils.json
 import salt.utils.path
-from salt.exceptions import CommandExecutionError, SaltInvocationError
+import salt.utils.state
+import salt.utils.thin
+from salt.exceptions import CommandExecutionError
+from salt.exceptions import SaltInvocationError
 from salt.loader.dunder import __file_client__
 from salt.state import HighState
+
+#  pylint: disable-next=import-error,no-name-in-module
+import saltext.dockermod.utils.dockermod.__init__
+
+#  pylint: disable-next=import-error,no-name-in-module
+import saltext.dockermod.utils.dockermod.translate.container
+
+#  pylint: disable-next=import-error,no-name-in-module
+import saltext.dockermod.utils.dockermod.translate.network
 
 __docformat__ = "restructuredtext en"
 
@@ -364,6 +376,7 @@ def _get_docker_py_versioninfo():
             pass
 
 
+#  pylint: disable-next=unused-argument
 def _get_client(timeout=NOTSET, **kwargs):
     client_kwargs = {}
     if timeout is not NOTSET:
@@ -402,9 +415,8 @@ def _get_client(timeout=NOTSET, **kwargs):
                 verify=True,
             )
         except Exception as exc:  # pylint: disable=broad-except
-            raise CommandExecutionError(
-                f"Docker machine {docker_machine} failed: {exc}"
-            )
+            #  pylint: disable-next=raise-missing-from
+            raise CommandExecutionError(f"Docker machine {docker_machine} failed: {exc}")
     try:
         # docker-py 2.0 renamed this client attribute
         ret = docker.APIClient(**client_kwargs)
@@ -442,7 +454,7 @@ def _docker_client(wrapped):
         """
         Ensure that the client is present
         """
-        kwargs = __utils__["args.clean_kwargs"](**kwargs)
+        kwargs = salt.utils.args.clean_kwargs(**kwargs)
         timeout = kwargs.pop("client_timeout", NOTSET)
         if "docker.client" not in __context__ or not hasattr(
             __context__["docker.client"], "timeout"
@@ -475,7 +487,7 @@ def _refresh_mine_cache(wrapped):
         """
         refresh salt mine on exit.
         """
-        returned = wrapped(*args, **__utils__["args.clean_kwargs"](**kwargs))
+        returned = wrapped(*args, **salt.utils.args.clean_kwargs(**kwargs))
         if _check_update_mine():
             __salt__["mine.send"]("docker.ps", verbose=True, all=True, host=True)
         return returned
@@ -598,6 +610,7 @@ def _get_top_level_images(imagedata, subset=None):
         filter_ = subset if subset is not None else imagedata
         return [x for x in filter_ if x not in parents]
     except (KeyError, TypeError):
+        #  pylint: disable-next=raise-missing-from
         raise CommandExecutionError(
             "Invalid image data passed to _get_top_level_images(). Please "
             "report this issue. Full image data: {}".format(imagedata)
@@ -679,16 +692,17 @@ def _client_wrapper(attr, *args, **kwargs):
         )
         ret = func(*args, **kwargs)
     except docker.errors.APIError as exc:
+        #  pylint: disable-next=no-else-raise
         if catch_api_errors:
             # Generic handling of Docker API errors
-            raise CommandExecutionError(
-                f"Error {exc.response.status_code}: {exc.explanation}"
-            )
+            #  pylint: disable-next=raise-missing-from
+            raise CommandExecutionError(f"Error {exc.response.status_code}: {exc.explanation}")
         else:
             # Allow API errors to be caught further up the stack
             raise
     except docker.errors.DockerException as exc:
         # More general docker exception (catches InvalidVersion, etc.)
+        #  pylint: disable-next=raise-missing-from
         raise CommandExecutionError(str(exc))
     except Exception as exc:  # pylint: disable=broad-except
         err = str(exc)
@@ -709,9 +723,7 @@ def _build_status(data, item):
     """
     stream = item["stream"]
     if "Running in" in stream:
-        data.setdefault("Intermediate_Containers", []).append(
-            stream.rstrip().split()[-1]
-        )
+        data.setdefault("Intermediate_Containers", []).append(stream.rstrip().split()[-1])
     if "Successfully built" in stream:
         data["Id"] = stream.rstrip().split()[-1]
 
@@ -799,9 +811,7 @@ def _push_status(data, item):
     if "id" in item:
         if "already pushed" in status or "already exists" in status:
             # Layer already exists
-            already_pushed = data.setdefault("Layers", {}).setdefault(
-                "Already_Pushed", []
-            )
+            already_pushed = data.setdefault("Layers", {}).setdefault("Already_Pushed", [])
             already_pushed.append(item["id"])
         elif "successfully pushed" in status or status == "pushed":
             # Pushed a new layer
@@ -816,9 +826,7 @@ def _error_detail(data, item):
     err = item["errorDetail"]
     if "code" in err:
         try:
-            msg = ": ".join(
-                (item["errorDetail"]["code"], item["errorDetail"]["message"])
-            )
+            msg = ": ".join((item["errorDetail"]["code"], item["errorDetail"]["message"]))
         except TypeError:
             msg = "{}: {}".format(
                 item["errorDetail"]["code"],
@@ -877,7 +885,8 @@ def get_client_args(limit=None):
         salt myminion docker.get_client_args logs
         salt myminion docker.get_client_args create_container,connect_container_to_network
     """
-    return __utils__["docker.get_client_args"](limit=limit)
+    #  pylint: disable-next=c-extension-no-member
+    return saltext.dockermod.utils.dockermod.__init__.get_client_args(limit=limit)
 
 
 def _get_create_kwargs(
@@ -898,12 +907,14 @@ def _get_create_kwargs(
     else:
         networks = {}
 
-    kwargs = __utils__["docker.translate_input"](
-        salt.utils.dockermod.translate.container,
+    #  pylint: disable-next=c-extension-no-member
+    kwargs = saltext.dockermod.utils.dockermod.__init__.translate_input(
+        #  pylint: disable-next=c-extension-no-member
+        saltext.dockermod.utils.dockermod.translate.container,
         skip_translate=skip_translate,
         ignore_collisions=ignore_collisions,
         validate_ip_addrs=validate_ip_addrs,
-        **__utils__["args.clean_kwargs"](**kwargs),
+        **salt.utils.args.clean_kwargs(**kwargs),
     )
 
     if networks:
@@ -913,9 +924,8 @@ def _get_create_kwargs(
         try:
             client_args = get_client_args(["create_container", "host_config"])
         except CommandExecutionError as exc:
-            log.error(
-                "docker.create: Error getting client args: '%s'", exc, exc_info=True
-            )
+            log.error("docker.create: Error getting client args: '%s'", exc, exc_info=True)
+            #  pylint: disable-next=raise-missing-from
             raise CommandExecutionError(f"Failed to get client args: {exc}")
 
     full_host_config = {}
@@ -968,7 +978,7 @@ def compare_containers(first, second, ignore=None):
         salt myminion docker.compare_containers foo bar
         salt myminion docker.compare_containers foo bar ignore=Hostname
     """
-    ignore = __utils__["args.split_input"](ignore or [])
+    ignore = salt.utils.args.split_input(ignore or [])
     result1 = inspect_container(first)
     result2 = inspect_container(second)
     ret = {}
@@ -1030,9 +1040,7 @@ def compare_containers(first, second, ignore=None):
     return ret
 
 
-compare_container = salt.utils.functools.alias_function(
-    compare_containers, "compare_container"
-)
+compare_container = salt.utils.functools.alias_function(compare_containers, "compare_container")
 
 
 def compare_container_networks(first, second):
@@ -1229,6 +1237,7 @@ def compare_container_networks(first, second):
             # in the network_settings
             for key in compare_keys.get("static", []):
                 val = nets2[net_name].get(key)
+                #  pylint: disable-next=no-else-continue
                 if key == "IPAMConfig":
                     _check_ipconfig(ret, net_name, new=val)
                     continue
@@ -1281,6 +1290,7 @@ def compare_container_networks(first, second):
                     # We don't need the final check since it's included in the
                     # _check_ipconfig helper
                     continue
+                #  pylint: disable-next=no-else-continue
                 if bool(old_val) is bool(new_val) is False:
                     continue
                 elif old_val != new_val:
@@ -1310,12 +1320,13 @@ def compare_networks(first, second, ignore="Name,Id,Created,Containers"):
 
         salt myminion docker.compare_network foo bar
     """
-    ignore = __utils__["args.split_input"](ignore or [])
+    ignore = salt.utils.args.split_input(ignore or [])
     net1 = inspect_network(first) if not isinstance(first, dict) else first
     net2 = inspect_network(second) if not isinstance(second, dict) else second
     ret = {}
 
     for item in net1:
+        #  pylint: disable-next=no-else-continue
         if item in ignore:
             continue
         else:
@@ -1323,12 +1334,14 @@ def compare_networks(first, second, ignore="Name,Id,Created,Containers"):
             ignore.append(item)
         val1 = net1[item]
         val2 = net2.get(item)
+        #  pylint: disable-next=no-else-continue
         if bool(val1) is bool(val2) is False:
             continue
         elif item == "IPAM":
             for subkey in val1:
                 subval1 = val1[subkey]
                 subval2 = val2.get(subkey)
+                #  pylint: disable-next=no-else-continue
                 if bool(subval1) is bool(subval2) is False:
                     continue
                 elif subkey == "Config":
@@ -1352,6 +1365,7 @@ def compare_networks(first, second, ignore="Name,Id,Created,Containers"):
             for subkey in val1:
                 subval1 = val1[subkey]
                 subval2 = val2.get(subkey)
+                #  pylint: disable-next=no-else-continue
                 if subkey == "com.docker.network.bridge.name":
                     continue
                 elif subval1 != subval2:
@@ -1367,6 +1381,7 @@ def compare_networks(first, second, ignore="Name,Id,Created,Containers"):
     for item in (x for x in net2 if x not in ignore):
         val1 = net1.get(item)
         val2 = net2[item]
+        #  pylint: disable-next=no-else-continue
         if bool(val1) is bool(val2) is False:
             continue
         elif val1 != val2:
@@ -1467,11 +1482,7 @@ def login(*registries):
         try:
             registry_auth.update(reg_conf)
         except TypeError:
-            errors.append(
-                "Docker registry '{}' was not specified as a dictionary".format(
-                    reg_name
-                )
-            )
+            errors.append(f"Docker registry '{reg_name}' was not specified as a dictionary")
 
     # If no registries passed, we will auth to all of them
     if not registries:
@@ -1561,11 +1572,7 @@ def logout(*registries):
         try:
             registry_auth.update(reg_conf)
         except TypeError:
-            errors.append(
-                "Docker registry '{}' was not specified as a dictionary".format(
-                    reg_name
-                )
-            )
+            errors.append(f"Docker registry '{reg_name}' was not specified as a dictionary")
 
     # If no registries passed, we will logout of all known registries
     if not registries:
@@ -1573,6 +1580,7 @@ def logout(*registries):
 
     results = ret.setdefault("Results", {})
     for registry in registries:
+        #  pylint: disable-next=no-else-continue
         if registry not in registry_auth:
             errors.append(f"No match found for registry '{registry}'")
             continue
@@ -1630,9 +1638,7 @@ def depends(name):
 
     return {
         "Containers": container_depends,
-        "Images": [
-            x[:12] for x, y in images(all=True).items() if y["ParentId"] == image_id
-        ],
+        "Images": [x[:12] for x, y in images(all=True).items() if y["ParentId"] == image_id],
     }
 
 
@@ -1700,6 +1706,7 @@ def exists(name):
     if contextkey in __context__:
         return __context__[contextkey]
     try:
+        #  pylint: disable-next=unused-variable
         c_info = _client_wrapper("inspect_container", name, catch_api_errors=False)
     except docker.errors.APIError:
         __context__[contextkey] = False
@@ -1931,9 +1938,7 @@ def inspect(name):
         if not exc.strerror.startswith("Error 404"):
             raise
 
-    raise CommandExecutionError(
-        f"Error 404: No such image/container/volume/network: {name}"
-    )
+    raise CommandExecutionError(f"Error 404: No such image/container/volume/network: {name}")
 
 
 def inspect_container(name):
@@ -2106,10 +2111,10 @@ def resolve_tag(name, **kwargs):
         salt myminion docker.resolve_tag centos:7 all=True
         salt myminion docker.resolve_tag c9f378ac27d9
     """
-    kwargs = __utils__["args.clean_kwargs"](**kwargs)
+    kwargs = salt.utils.args.clean_kwargs(**kwargs)
     all_ = kwargs.pop("all", False)
     if kwargs:
-        __utils__["args.invalid_kwargs"](kwargs)
+        salt.utils.args.invalid_kwargs(kwargs)
 
     try:
         inspect_result = inspect_image(name)
@@ -2192,7 +2197,7 @@ def logs(name, **kwargs):
         salt myminion docker.logs mycontainer since='1 week ago'
         salt myminion docker.logs mycontainer since='1 fortnight ago'
     """
-    kwargs = __utils__["args.clean_kwargs"](**kwargs)
+    kwargs = salt.utils.args.clean_kwargs(**kwargs)
     if "stream" in kwargs:
         raise SaltInvocationError("The 'stream' argument is not supported")
 
@@ -2206,6 +2211,7 @@ def logs(name, **kwargs):
         # APIError.
         if HAS_TIMELIB:
             try:
+                #  pylint: disable-next=c-extension-no-member
                 kwargs["since"] = timelib.strtodatetime(kwargs["since"])
             except Exception as exc:  # pylint: disable=broad-except
                 log.warning(
@@ -2295,6 +2301,7 @@ def port(name, private_port=None):
                     raise SaltInvocationError(err)
                 pattern = port_num + "/" + protocol
             except AttributeError:
+                #  pylint: disable-next=raise-missing-from
                 raise SaltInvocationError(err)
 
     ret = {}
@@ -2355,9 +2362,7 @@ def ps_(filters=None, **kwargs):
             continue
         for item in container:
             c_state = (
-                "running"
-                if container.get("Status", "").lower().startswith("up ")
-                else "stopped"
+                "running" if container.get("Status", "").lower().startswith("up ") else "stopped"
             )
             bucket = context_data.setdefault(c_state, {})
             c_key = key_map.get(item, item)
@@ -2541,10 +2546,7 @@ def _create_networking_config(networks):
     log.debug("creating networking config from %s", networks)
     return _client_wrapper(
         "create_networking_config",
-        {
-            k: _client_wrapper("create_endpoint_config", **v)
-            for k, v in networks.items()
-        },
+        {k: _client_wrapper("create_endpoint_config", **v) for k, v in networks.items()},
     )
 
 
@@ -3159,7 +3161,7 @@ def create(
 
         .. note::
             See the documentation for security_opt at
-            https://docs.docker.com/engine/reference/run/#security-configuration
+            https://docs.docker.com/engine/containers/run/
 
     shm_size
         Size of /dev/shm
@@ -3312,6 +3314,7 @@ def create(
         try:
             start_(name)
         except CommandExecutionError as exc:
+            #  pylint: disable-next=raise-missing-from
             raise CommandExecutionError(
                 "Failed to start container after creation",
                 info={"response": response, "error": str(exc)},
@@ -3405,6 +3408,7 @@ def run_container(
         except CommandExecutionError:
             pass
         else:
+            #  pylint: disable-next=no-else-raise
             if pre_state == "running" and not (replace and force):
                 raise CommandExecutionError(
                     "Container '{}' exists and is running. Run with "
@@ -3491,9 +3495,7 @@ def run_container(
         if networks:
             try:
                 for net_name, net_conf in networks.items():
-                    __salt__["docker.connect_container_to_network"](
-                        ret["Id"], net_name, **net_conf
-                    )
+                    __salt__["docker.connect_container_to_network"](ret["Id"], net_name, **net_conf)
             except CommandExecutionError as exc:
                 # Make an effort to remove the container if auto_remove was enabled
                 if auto_remove:
@@ -3504,6 +3506,7 @@ def run_container(
                             f"Failed to auto_remove container: {rm_exc}"
                         )
                 # Raise original exception with additional info
+                #  pylint: disable-next=raise-missing-from
                 raise CommandExecutionError(str(exc), info=exc_info)
 
         # Start the container
@@ -3518,9 +3521,7 @@ def run_container(
             # exits during iteration, the next iteration of the generator will
             # raise an exception since the container will no longer exist.
             try:
-                for line in _client_wrapper(
-                    "logs", ret["Id"], stream=True, timestamps=False
-                ):
+                for line in _client_wrapper("logs", ret["Id"], stream=True, timestamps=False):
                     output.append(salt.utils.stringutils.to_unicode(line))
             except CommandExecutionError:
                 msg = (
@@ -3556,6 +3557,7 @@ def run_container(
             # it to other_errors as a fallback.
             exc_info.setdefault("other_errors", []).append(exc.info)
         # Re-raise with all of the available additional info
+        #  pylint: disable-next=raise-missing-from
         raise CommandExecutionError(str(exc), info=exc_info)
 
     return ret
@@ -3616,28 +3618,24 @@ def copy_from(name, source, dest, overwrite=False, makedirs=False):
                 try:
                     os.makedirs(dest_dir)
                 except OSError as exc:
+                    #  pylint: disable-next=raise-missing-from
                     raise CommandExecutionError(
-                        "Unable to make destination directory {}: {}".format(
-                            dest_dir, exc
-                        )
+                        f"Unable to make destination directory {dest_dir}: {exc}"
                     )
             else:
                 raise SaltInvocationError(f"Directory {dest_dir} does not exist")
     if not overwrite and os.path.exists(dest):
         raise CommandExecutionError(
-            "Destination path {} already exists. Use overwrite=True to "
-            "overwrite it".format(dest)
+            "Destination path {} already exists. Use overwrite=True to " "overwrite it".format(dest)
         )
 
     # Source file sanity checks
+    #  pylint: disable-next=no-else-raise
     if not os.path.isabs(source):
         raise SaltInvocationError("Source path must be absolute")
     else:
         if retcode(name, f"test -e {shlex.quote(source)}", ignore_retcode=True) == 0:
-            if (
-                retcode(name, f"test -f {shlex.quote(source)}", ignore_retcode=True)
-                != 0
-            ):
+            if retcode(name, f"test -f {shlex.quote(source)}", ignore_retcode=True) != 0:
                 raise SaltInvocationError("Source must be a regular file")
         else:
             raise SaltInvocationError(f"Source file {source} does not exist")
@@ -3785,6 +3783,7 @@ def export(name, path, overwrite=False, makedirs=False, compression=None, **kwar
         if not os.path.isabs(path):
             raise SaltInvocationError(err)
     except AttributeError:
+        #  pylint: disable-next=raise-missing-from
         raise SaltInvocationError(err)
 
     if os.path.exists(path) and not overwrite:
@@ -3823,14 +3822,14 @@ def export(name, path, overwrite=False, makedirs=False, compression=None, **kwar
         try:
             os.makedirs(parent_dir)
         except OSError as exc:
-            raise CommandExecutionError(
-                f"Unable to make parent dir {parent_dir}: {exc}"
-            )
+            #  pylint: disable-next=raise-missing-from
+            raise CommandExecutionError(f"Unable to make parent dir {parent_dir}: {exc}")
 
     if compression == "gzip":
         try:
             out = gzip.open(path, "wb")
         except OSError as exc:
+            #  pylint: disable-next=raise-missing-from
             raise CommandExecutionError(f"Unable to open {path} for writing: {exc}")
     elif compression == "bzip2":
         compressor = bz2.BZ2Compressor()
@@ -3844,17 +3843,18 @@ def export(name, path, overwrite=False, makedirs=False, compression=None, **kwar
             # open the filehandle. If not using gzip, we need to open the
             # filehandle here. We make sure to close it in the "finally" block
             # below.
-            out = __utils__["files.fopen"](
-                path, "wb"
-            )  # pylint: disable=resource-leakage
+            #  pylint: disable-next=unknown-option-value,undefined-variable
+            out = __utils__["files.fopen"](path, "wb")  # pylint: disable=resource-leakage
         response = _client_wrapper("export", name)
         buf = None
         while buf != "":
             buf = response.read(4096)
             if buf:
                 if compression in ("bzip2", "xz"):
+                    #  pylint: disable-next=possibly-used-before-assignment
                     data = compressor.compress(buf)
                     if data:
+                        #  pylint: disable-next=possibly-used-before-assignment
                         out.write(data)
                 else:
                     out.write(buf)
@@ -3869,6 +3869,7 @@ def export(name, path, overwrite=False, makedirs=False, compression=None, **kwar
             os.remove(path)
         except OSError:
             pass
+        #  pylint: disable-next=raise-missing-from
         raise CommandExecutionError(f"Error occurred during container export: {exc}")
     finally:
         out.close()
@@ -3928,12 +3929,12 @@ def rm_(name, force=False, volumes=False, **kwargs):
         salt myminion docker.rm mycontainer
         salt myminion docker.rm mycontainer force=True
     """
-    kwargs = __utils__["args.clean_kwargs"](**kwargs)
+    kwargs = salt.utils.args.clean_kwargs(**kwargs)
     stop_ = kwargs.pop("stop", False)
     timeout = kwargs.pop("timeout", None)
     auto_remove = False
     if kwargs:
-        __utils__["args.invalid_kwargs"](kwargs)
+        salt.utils.args.invalid_kwargs(kwargs)
 
     if state(name) == "running" and not (force or stop_):
         raise CommandExecutionError(
@@ -4086,11 +4087,10 @@ def build(
     _prep_pull()
 
     if repository or tag:
+        #  pylint: disable-next=no-else-raise
         if not repository and tag:
             # Have to have both or neither
-            raise SaltInvocationError(
-                "If tagging, both a repository and tag are required"
-            )
+            raise SaltInvocationError("If tagging, both a repository and tag are required")
         else:
             if not isinstance(repository, str):
                 repository = str(repository)
@@ -4276,9 +4276,7 @@ def dangling(prune=False, force=False):
     """
     all_images = images(all=True)
     dangling_images = [
-        x[:12]
-        for x in _get_top_level_images(all_images)
-        if all_images[x]["RepoTags"] is None
+        x[:12] for x in _get_top_level_images(all_images) if all_images[x]["RepoTags"] is None
     ]
     if not prune:
         return dangling_images
@@ -4358,6 +4356,7 @@ def import_(source, repository, tag="latest", api_response=False):
     ret = {"Time_Elapsed": time.time() - time_started}
     _clear_context()
 
+    #  pylint: disable-next=no-else-raise
     if not response:
         raise CommandExecutionError(
             f"Import failed for {source}, no response returned from Docker API"
@@ -4491,9 +4490,7 @@ def load(path, repository=None, tag=None):
                 result = tag_(top_level_images[0], repository=repository, tag=tag)
                 ret["Image"] = tagged_image
             except IndexError:
-                ret["Warning"] = (
-                    "No top-level image layers were loaded, no image was tagged"
-                )
+                ret["Warning"] = "No top-level image layers were loaded, no image was tagged"
             except Exception as exc:  # pylint: disable=broad-except
                 ret["Warning"] = "Failed to tag {} as {}: {}".format(
                     top_level_images[0], tagged_image, exc
@@ -4518,9 +4515,7 @@ def layers(name):
     """
     ret = []
     cmd = ["docker", "history", "-q", name]
-    for line in reversed(
-        __salt__["cmd.run_stdout"](cmd, python_shell=False).splitlines()
-    ):
+    for line in reversed(__salt__["cmd.run_stdout"](cmd, python_shell=False).splitlines()):
         ret.append(line)
     if not ret:
         raise CommandExecutionError(f"Image '{name}' not found")
@@ -4592,6 +4587,7 @@ def pull(
     ret = {"Time_Elapsed": time.time() - time_started, "retcode": 0}
     _clear_context()
 
+    #  pylint: disable-next=no-else-raise
     if not response:
         raise CommandExecutionError(
             f"Pull failed for {image}, no response returned from Docker API"
@@ -4606,6 +4602,7 @@ def pull(
         try:
             event = salt.utils.json.loads(event)
         except Exception as exc:  # pylint: disable=broad-except
+            #  pylint: disable-next=raise-missing-from
             raise CommandExecutionError(
                 f"Unable to interpret API event: '{event}'",
                 info={"Error": str(exc)},
@@ -4687,6 +4684,7 @@ def push(
     ret = {"Time_Elapsed": time.time() - time_started, "retcode": 0}
     _clear_context()
 
+    #  pylint: disable-next=no-else-raise
     if not response:
         raise CommandExecutionError(
             f"Push failed for {image}, no response returned from Docker API"
@@ -4700,6 +4698,7 @@ def push(
         try:
             event = salt.utils.json.loads(event)
         except Exception as exc:  # pylint: disable=broad-except
+            #  pylint: disable-next=raise-missing-from
             raise CommandExecutionError(
                 f"Unable to interpret API event: '{event}'",
                 info={"Error": str(exc)},
@@ -4874,6 +4873,7 @@ def save(name, path, overwrite=False, makedirs=False, compression=None, **kwargs
         if not os.path.isabs(path):
             raise SaltInvocationError(err)
     except AttributeError:
+        #  pylint: disable-next=raise-missing-from
         raise SaltInvocationError(err)
 
     if os.path.exists(path) and not overwrite:
@@ -4911,13 +4911,12 @@ def save(name, path, overwrite=False, makedirs=False, compression=None, **kwargs
             )
 
     if compression:
+        #  pylint: disable-next=undefined-variable
         saved_path = __utils__["files.mkstemp"]()
     else:
         saved_path = path
     # use the image name if its valid if not use the image id
-    image_to_save = (
-        name if name in inspect_image(name)["RepoTags"] else inspect_image(name)["Id"]
-    )
+    image_to_save = name if name in inspect_image(name)["RepoTags"] else inspect_image(name)["Id"]
     cmd = ["docker", "save", "-o", saved_path, image_to_save]
     time_started = time.time()
     result = __salt__["cmd.run_all"](cmd, python_shell=False)
@@ -4932,6 +4931,7 @@ def save(name, path, overwrite=False, makedirs=False, compression=None, **kwargs
             try:
                 out = gzip.open(path, "wb")
             except OSError as exc:
+                #  pylint: disable-next=raise-missing-from
                 raise CommandExecutionError(f"Unable to open {path} for writing: {exc}")
         elif compression == "bzip2":
             compressor = bz2.BZ2Compressor()
@@ -4939,6 +4939,7 @@ def save(name, path, overwrite=False, makedirs=False, compression=None, **kwargs
             compressor = lzma.LZMACompressor()
 
         try:
+            #  pylint: disable-next=undefined-variable
             with __utils__["files.fopen"](saved_path, "rb") as uncompressed:
                 # No need to decode on read and encode on on write, since we're
                 # reading and immediately writing out bytes.
@@ -4946,14 +4947,17 @@ def save(name, path, overwrite=False, makedirs=False, compression=None, **kwargs
                     # gzip doesn't use a Compressor object, it uses a .open()
                     # method to open the filehandle. If not using gzip, we need
                     # to open the filehandle here.
+                    #  pylint: disable-next=undefined-variable
                     out = __utils__["files.fopen"](path, "wb")
                 buf = None
                 while buf != "":
                     buf = uncompressed.read(4096)
                     if buf:
                         if compression in ("bzip2", "xz"):
+                            #  pylint: disable-next=possibly-used-before-assignment
                             data = compressor.compress(buf)
                             if data:
+                                #  pylint: disable-next=possibly-used-before-assignment
                                 out.write(data)
                         else:
                             out.write(buf)
@@ -4968,6 +4972,7 @@ def save(name, path, overwrite=False, makedirs=False, compression=None, **kwargs
                 os.remove(path)
             except OSError:
                 pass
+            #  pylint: disable-next=raise-missing-from
             raise CommandExecutionError(f"Error occurred during image save: {exc}")
         finally:
             try:
@@ -5031,9 +5036,7 @@ def tag_(name, repository, tag="latest", force=False):
         tag = str(tag)
 
     image_id = inspect_image(name)["Id"]
-    response = _client_wrapper(
-        "tag", image_id, repository=repository, tag=tag, force=force
-    )
+    response = _client_wrapper("tag", image_id, repository=repository, tag=tag, force=force)
     _clear_context()
     # Only non-error return case is a True return, so just return the response
     return response
@@ -5064,9 +5067,9 @@ def networks(names=None, ids=None):
         salt myminion docker.networks ids=1f9d2454d0872b68dd9e8744c6e7a4c66b86f10abaccc21e14f7f014f729b2bc
     """
     if names is not None:
-        names = __utils__["args.split_input"](names)
+        names = salt.utils.args.split_input(names)
     if ids is not None:
-        ids = __utils__["args.split_input"](ids)
+        ids = salt.utils.args.split_input(ids)
 
     response = _client_wrapper("networks", names=names, ids=ids)
     # Work around https://github.com/docker/docker-py/issues/1775
@@ -5087,6 +5090,7 @@ def create_network(
     skip_translate=None,
     ignore_collisions=False,
     validate_ip_addrs=True,
+    #  pylint: disable-next=unused-argument
     client_timeout=salt.utils.dockermod.CLIENT_TIMEOUT,
     **kwargs,
 ):
@@ -5323,20 +5327,21 @@ def create_network(
         # IPv4 and IPv6
         salt myminion docker.create_network mynet ipam_pools='[{"subnet": "10.0.0.0/24", "gateway": "10.0.0.1"}, {"subnet": "fe3f:2180:26:1::60/123", "gateway": "fe3f:2180:26:1::61"}]'
     """
-    kwargs = __utils__["docker.translate_input"](
-        salt.utils.dockermod.translate.network,
+    #  pylint: disable-next=c-extension-no-member
+    kwargs = saltext.dockermod.utils.dockermod.__init__.translate_input(
+        #  pylint: disable-next=c-extension-no-member
+        saltext.dockermod.utils.dockermod.translate.network,
         skip_translate=skip_translate,
         ignore_collisions=ignore_collisions,
         validate_ip_addrs=validate_ip_addrs,
-        **__utils__["args.clean_kwargs"](**kwargs),
+        **salt.utils.args.clean_kwargs(**kwargs),
     )
 
     if "ipam" not in kwargs:
         ipam_kwargs = {}
         for key in [
             x
-            for x in ["ipam_driver", "ipam_opts"]
-            + get_client_args("ipam_config")["ipam_config"]
+            for x in ["ipam_driver", "ipam_opts"] + get_client_args("ipam_config")["ipam_config"]
             if x in kwargs
         ]:
             ipam_kwargs[key] = kwargs.pop(key)
@@ -5346,7 +5351,8 @@ def create_network(
         # IPAM-specific configuration was passed. Just create the network
         # without specifying IPAM configuration.
         if ipam_pools or ipam_kwargs:
-            kwargs["ipam"] = __utils__["docker.create_ipam_config"](
+            #  pylint: disable-next=c-extension-no-member
+            kwargs["ipam"] = saltext.dockermod.utils.dockermod.__init__.create_ipam_config(
                 *ipam_pools, **ipam_kwargs
             )
 
@@ -5370,6 +5376,7 @@ def remove_network(network_id):
         salt myminion docker.remove_network mynet
         salt myminion docker.remove_network 1f9d2454d0872b68dd9e8744c6e7a4c66b86f10abaccc21e14f7f014f729b2bc
     """
+    #  pylint: disable-next=unused-variable
     response = _client_wrapper("remove_network", network_id)
     _clear_context()
     return True
@@ -5421,20 +5428,17 @@ def connect_container_to_network(container, net_id, **kwargs):
         salt myminion docker.connect_container_to_network web-1 mynet ipv4_address=10.20.0.10
         salt myminion docker.connect_container_to_network web-1 1f9d2454d0872b68dd9e8744c6e7a4c66b86f10abaccc21e14f7f014f729b2bc
     """
-    kwargs = __utils__["args.clean_kwargs"](**kwargs)
+    kwargs = salt.utils.args.clean_kwargs(**kwargs)
     log.debug(
-        "Connecting container '%s' to network '%s' with the following "
-        "configuration: %s",
+        #  pylint: disable-next=implicit-str-concat
+        "Connecting container '%s' to network '%s' with the following " "configuration: %s",
         container,
         net_id,
         kwargs,
     )
-    response = _client_wrapper(
-        "connect_container_to_network", container, net_id, **kwargs
-    )
-    log.debug(
-        "Successfully connected container '%s' to network '%s'", container, net_id
-    )
+    #  pylint: disable-next=unused-variable
+    response = _client_wrapper("connect_container_to_network", container, net_id, **kwargs)
+    log.debug("Successfully connected container '%s' to network '%s'", container, net_id)
     _clear_context()
     return True
 
@@ -5459,9 +5463,8 @@ def disconnect_container_from_network(container, network_id):
         salt myminion docker.disconnect_container_from_network web-1 1f9d2454d0872b68dd9e8744c6e7a4c66b86f10abaccc21e14f7f014f729b2bc
     """
     log.debug("Disconnecting container '%s' from network '%s'", container, network_id)
-    response = _client_wrapper(
-        "disconnect_container_from_network", container, network_id
-    )
+    #  pylint: disable-next=unused-variable
+    response = _client_wrapper("disconnect_container_from_network", container, network_id)
     log.debug(
         "Successfully disconnected container '%s' from network '%s'",
         container,
@@ -5554,9 +5557,7 @@ def create_volume(name, driver=None, driver_opts=None):
 
         salt myminion docker.create_volume my_volume driver=local
     """
-    response = _client_wrapper(
-        "create_volume", name, driver=driver, driver_opts=driver_opts
-    )
+    response = _client_wrapper("create_volume", name, driver=driver, driver_opts=driver_opts)
     _clear_context()
     # Only non-error return case is a True return, so just return the response
     return response
@@ -5577,6 +5578,7 @@ def remove_volume(name):
 
         salt myminion docker.remove_volume my_volume
     """
+    #  pylint: disable-next=unused-variable
     response = _client_wrapper("remove_volume", name)
     _clear_context()
     return True
@@ -5817,9 +5819,7 @@ def stop(name, timeout=None, **kwargs):
         if kwargs.get("unpause", False):
             unpause_result = _change_state(name, "unpause", "running")
             if unpause_result["result"] is False:
-                unpause_result["comment"] = "Failed to unpause container '{}'".format(
-                    name
-                )
+                unpause_result["comment"] = f"Failed to unpause container '{name}'"
                 return unpause_result
         else:
             return {
@@ -5963,17 +5963,17 @@ def prune(
     containers : False
         If ``True``, prunes stopped containers (documentation__)
 
-        .. __: https://docs.docker.com/engine/reference/commandline/container_prune/#filtering
+        .. __: https://docs.docker.com/reference/cli/docker/container/prune/
 
     images : False
         If ``True``, prunes unused images (documentation__)
 
-        .. __: https://docs.docker.com/engine/reference/commandline/image_prune/#filtering
+        .. __: https://docs.docker.com/reference/cli/docker/image/prune/
 
     networks : False
         If ``False``, prunes unreferenced networks (documentation__)
 
-        .. __: https://docs.docker.com/engine/reference/commandline/network_prune/#filtering)
+        .. __: https://docs.docker.com/reference/cli/docker/network/prune/
 
     build : False
         If ``True``, clears the builder cache
@@ -6017,7 +6017,7 @@ def prune(
     if system is None and not any((containers, images, networks, build)):
         system = True
 
-    filters = __utils__["args.clean_kwargs"](**filters)
+    filters = salt.utils.args.clean_kwargs(**filters)
     for fname in list(filters):
         if not isinstance(filters[fname], bool):
             # support comma-separated values
@@ -6114,9 +6114,8 @@ def _script(
         except OSError as exc:
             log.error("cmd.script: Unable to clean tempfile '%s': %s", path, exc)
 
-    path = __utils__["files.mkstemp"](
-        dir="/tmp", prefix="salt", suffix=os.path.splitext(source)[1]
-    )
+    #  pylint: disable-next=undefined-variable
+    path = __utils__["files.mkstemp"](dir="/tmp", prefix="salt", suffix=os.path.splitext(source)[1])
     if template:
         fn_ = __salt__["cp.get_template"](source, path, template, saltenv)
         if not fn_:
@@ -6649,9 +6648,7 @@ def _prepare_trans_tar(name, sls_opts, mods=None, pillar=None, extra_filerefs=""
     # be somewhere else
     refs = salt.client.ssh.state.lowstate_file_refs(chunks, extra_filerefs)
     with _file_client() as fileclient:
-        return salt.client.ssh.state.prep_trans_tar(
-            fileclient, chunks, refs, pillar, name
-        )
+        return salt.client.ssh.state.prep_trans_tar(fileclient, chunks, refs, pillar, name)
 
 
 def _compile_state(sls_opts, mods=None):
@@ -6716,14 +6713,12 @@ def call(name, function, *args, **kwargs):
         raise CommandExecutionError("Missing function parameter")
 
     # move salt into the container
-    thin_path = __utils__["thin.gen_thin"](
+    thin_path = salt.utils.thin.gen_thin(
         __opts__["cachedir"],
         extra_mods=__salt__["config.option"]("thin_extra_mods", ""),
         so_mods=__salt__["config.option"]("thin_so_mods", ""),
     )
-    ret = copy_to(
-        name, thin_path, os.path.join(thin_dest_path, os.path.basename(thin_path))
-    )
+    ret = copy_to(name, thin_path, os.path.join(thin_dest_path, os.path.basename(thin_path)))
 
     # figure out available python interpreter inside the container (only Python3)
     pycmds = ("python3", "/usr/libexec/platform-python")
@@ -6770,11 +6765,7 @@ def call(name, function, *args, **kwargs):
                 function,
             ]
             + list(args)
-            + [
-                f"{key}={value}"
-                for (key, value) in kwargs.items()
-                if not key.startswith("__")
-            ]
+            + [f"{key}={value}" for (key, value) in kwargs.items() if not key.startswith("__")]
         )
 
         ret = run_all(name, subprocess.list2cmdline(map(str, salt_argv)))
@@ -6784,7 +6775,7 @@ def call(name, function, *args, **kwargs):
 
         # process "real" result in stdout
         try:
-            data = __utils__["json.find_json"](ret["stdout"])
+            data = salt.utils.json.find_json(ret["stdout"])
             local = data.get("local", data)
             if isinstance(local, dict):
                 if "retcode" in local:
@@ -6870,7 +6861,7 @@ def sls(name, mods=None, **kwargs):
     pillar_override = kwargs.pop("pillar", None)
     if "saltenv" not in kwargs:
         kwargs["saltenv"] = "base"
-    sls_opts = __utils__["state.get_sls_opts"](__opts__, **kwargs)
+    sls_opts = salt.utils.state.get_sls_opts(__opts__, **kwargs)
 
     # gather grains from the container
     grains = call(name, "grains.items")
@@ -6906,7 +6897,7 @@ def sls(name, mods=None, **kwargs):
 
     ret = None
     try:
-        trans_tar_sha256 = __utils__["hashutils.get_hash"](trans_tar, "sha256")
+        trans_tar_sha256 = salt.utils.hashutils.get_hash(trans_tar, "sha256")
         copy_to(
             name,
             trans_tar,
@@ -6931,18 +6922,17 @@ def sls(name, mods=None, **kwargs):
         try:
             os.remove(trans_tar)
         except OSError as exc:
-            log.error(
-                "docker.sls: Unable to remove state tarball '%s': %s", trans_tar, exc
-            )
+            log.error("docker.sls: Unable to remove state tarball '%s': %s", trans_tar, exc)
     if not isinstance(ret, dict):
         __context__["retcode"] = 1
-    elif not __utils__["state.check_result"](ret):
+    elif not salt.utils.state.check_result(ret):
         __context__["retcode"] = 2
     else:
         __context__["retcode"] = 0
     return ret
 
 
+#  pylint: disable-next=unused-argument
 def highstate(name, saltenv="base", **kwargs):
     """
     Apply a highstate to the running container
@@ -6968,9 +6958,7 @@ def highstate(name, saltenv="base", **kwargs):
     return sls(name, saltenv="base", **kwargs)
 
 
-def sls_build(
-    repository, tag="latest", base="opensuse/python", mods=None, dryrun=False, **kwargs
-):
+def sls_build(repository, tag="latest", base="opensuse/python", mods=None, dryrun=False, **kwargs):
     """
     .. versionchanged:: 2018.3.0
         The repository and tag must now be passed separately using the
@@ -7042,7 +7030,7 @@ def sls_build(
         salt myminion docker.sls_build imgname base=mybase mods=rails,web
 
     """
-    create_kwargs = __utils__["args.clean_kwargs"](**copy.deepcopy(kwargs))
+    create_kwargs = salt.utils.args.clean_kwargs(**copy.deepcopy(kwargs))
     for key in ("image", "name", "cmd", "interactive", "tty", "extra_filerefs"):
         try:
             del create_kwargs[key]
@@ -7050,9 +7038,7 @@ def sls_build(
             pass
 
     # start a new container
-    ret = create(
-        image=base, cmd="sleep infinity", interactive=True, tty=True, **create_kwargs
-    )
+    ret = create(image=base, cmd="sleep infinity", interactive=True, tty=True, **create_kwargs)
     id_ = ret["Id"]
     try:
         start_(id_)
@@ -7060,7 +7046,7 @@ def sls_build(
         # Now execute the state into the container
         ret = sls(id_, mods, **kwargs)
         # fail if the state was not successful
-        if not dryrun and not __utils__["state.check_result"](ret):
+        if not dryrun and not salt.utils.state.check_result(ret):
             raise CommandExecutionError(ret)
         if dryrun is False:
             ret = commit(id_, repository, tag=tag)

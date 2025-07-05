@@ -34,17 +34,16 @@ def state_tree(state_tree):
     """
     testfile = "foo"
 
-    with pytest.helpers.temp_file(
-        "top.sls", top_sls, state_tree
-    ), pytest.helpers.temp_file(
-        "core.sls", core_state, state_tree
-    ), pytest.helpers.temp_file(
-        "testfile", testfile, state_tree
+    with (
+        pytest.helpers.temp_file("top.sls", top_sls, state_tree),
+        pytest.helpers.temp_file("core.sls", core_state, state_tree),
+        pytest.helpers.temp_file("testfile", testfile, state_tree),
     ):
         yield state_tree
 
 
 @pytest.fixture(scope="module")
+#  pylint: disable-next=unused-argument
 def container(salt_factories, state_tree):
 
     factory = salt_factories.get_container(
@@ -64,6 +63,7 @@ def container(salt_factories, state_tree):
 
 
 @pytest.fixture
+#  pylint: disable-next=unused-argument
 def docker(modules, container):
     return modules.docker
 
@@ -76,6 +76,7 @@ def test_docker_call(docker, container):
     assert ret is True
 
 
+#  pylint: disable-next=unused-argument
 def test_docker_sls(docker, container, state_tree, tmp_path):
     """
     check that docker.sls works, and works with a container not running as root
@@ -84,6 +85,7 @@ def test_docker_sls(docker, container, state_tree, tmp_path):
     assert ret.result is True
 
 
+#  pylint: disable-next=unused-argument
 def test_docker_highstate(docker, container, state_tree, tmp_path):
     """
     check that docker.highstate works, and works with a container not running as root

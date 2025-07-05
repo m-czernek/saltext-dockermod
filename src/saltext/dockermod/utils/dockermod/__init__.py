@@ -11,9 +11,12 @@ import logging
 import salt.utils.args
 import salt.utils.data
 import salt.utils.dockermod.translate
-from salt.exceptions import CommandExecutionError, SaltInvocationError
+from salt.exceptions import CommandExecutionError
+from salt.exceptions import SaltInvocationError
 from salt.utils.args import get_function_argspec as _argspec
-from salt.utils.dockermod.translate.helpers import split as _split
+
+#  pylint: disable-next=import-error,no-name-in-module
+from saltext.dockermod.utils.dockermod.translate.helpers import split as _split
 
 try:
     import docker
@@ -58,8 +61,7 @@ def get_client_args(limit=None):
     ret = {}
 
     if not limit or any(
-        x in limit
-        for x in ("create_container", "host_config", "connect_container_to_network")
+        x in limit for x in ("create_container", "host_config", "connect_container_to_network")
     ):
         try:
             ret["create_container"] = _argspec(docker.APIClient.create_container).args
@@ -67,6 +69,7 @@ def get_client_args(limit=None):
             try:
                 ret["create_container"] = _argspec(docker.Client.create_container).args
             except AttributeError:
+                #  pylint: disable-next=raise-missing-from
                 raise CommandExecutionError("Coult not get create_container argspec")
 
         try:
@@ -75,6 +78,7 @@ def get_client_args(limit=None):
             try:
                 ret["host_config"] = _argspec(docker.utils.create_host_config).args
             except AttributeError:
+                #  pylint: disable-next=raise-missing-from
                 raise CommandExecutionError("Could not get create_host_config argspec")
 
         try:
@@ -92,6 +96,7 @@ def get_client_args(limit=None):
                         docker.utils.create_endpoint_config
                     ).args
                 except AttributeError:
+                    #  pylint: disable-next=raise-missing-from
                     raise CommandExecutionError(
                         "Could not get connect_container_to_network argspec"
                     )
@@ -120,8 +125,10 @@ def get_client_args(limit=None):
             try:
                 ret["ipam_config"] = _argspec(docker.utils.create_ipam_pool).args
             except AttributeError:
+                #  pylint: disable-next=raise-missing-from
                 raise CommandExecutionError("Could not get ipam args")
 
+    #  pylint: disable-next=consider-using-dict-items
     for item in ret:
         # The API version is passed automagically by the API code that imports
         # these classes/functions and is not an arg that we will be passing, so
@@ -158,11 +165,7 @@ def get_client_args(limit=None):
 
 
 def translate_input(
-    translator,
-    skip_translate=None,
-    ignore_collisions=False,
-    validate_ip_addrs=True,
-    **kwargs
+    translator, skip_translate=None, ignore_collisions=False, validate_ip_addrs=True, **kwargs
 ):
     """
     Translate CLI/SLS input into the format the API expects. The ``translator``
@@ -271,16 +274,12 @@ def create_ipam_config(*pools, **kwargs):
 
     try:
         # docker-py 2.0 and newer
-        pool_args = salt.utils.args.get_function_argspec(
-            docker.types.IPAMPool.__init__
-        ).args
+        pool_args = salt.utils.args.get_function_argspec(docker.types.IPAMPool.__init__).args
         create_pool = docker.types.IPAMPool
         create_config = docker.types.IPAMConfig
     except AttributeError:
         # docker-py < 2.0
-        pool_args = salt.utils.args.get_function_argspec(
-            docker.utils.create_ipam_pool
-        ).args
+        pool_args = salt.utils.args.get_function_argspec(docker.utils.create_ipam_pool).args
         create_pool = docker.utils.create_ipam_pool
         create_config = docker.utils.create_ipam_config
 
@@ -290,8 +289,8 @@ def create_ipam_config(*pools, **kwargs):
             alias_val = kwargs.pop(alias_key)
             if primary_key in kwargs:
                 log.warning(
-                    "docker.create_ipam_config: Both '%s' and '%s' "
-                    "passed. Ignoring '%s'",
+                    #  pylint: disable-next=implicit-str-concat
+                    "docker.create_ipam_config: Both '%s' and '%s' " "passed. Ignoring '%s'",
                     alias_key,
                     primary_key,
                     alias_key,
@@ -320,6 +319,7 @@ def create_ipam_config(*pools, **kwargs):
         # range, or map of aux addresses, even when no subnet is passed.
         # However, attempting to use this IPAM pool when creating the network
         # will cause the Docker Engine to throw an error.
+        #  pylint: disable-next=no-else-raise
         if any("Subnet" not in pool for pool in pool_configs):
             raise SaltInvocationError("A subnet is required in each IPAM pool")
         else:

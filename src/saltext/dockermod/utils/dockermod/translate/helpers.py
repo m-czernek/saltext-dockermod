@@ -79,6 +79,7 @@ def get_port_range(port_def):
             )
         else:
             msg = f"'{port_def}' is non-numeric or an invalid port range"
+        #  pylint: disable-next=raise-missing-from
         raise ValueError(msg)
     else:
         return range_start, range_end
@@ -146,6 +147,7 @@ def translate_int(val):
         try:
             val = int(val)
         except (TypeError, ValueError):
+            #  pylint: disable-next=raise-missing-from
             raise SaltInvocationError(f"'{val}' is not an integer")
     return val
 
@@ -238,6 +240,7 @@ def translate_device_rates(val, numeric_rate=True):
             try:
                 item["Rate"] = int(item["Rate"])
             except ValueError:
+                #  pylint: disable-next=raise-missing-from
                 raise SaltInvocationError(
                     "Rate '{Rate}' for path '{Path}' is non-numeric".format(**item)
                 )
@@ -257,6 +260,7 @@ def translate_key_val(val, delimiter="="):
         try:
             lvalue, rvalue = split(item, delimiter, 1)
         except (AttributeError, TypeError, ValueError):
+            #  pylint: disable-next=raise-missing-from
             raise SaltInvocationError(f"'{item}' is not a key{delimiter}value pair")
         new_val[lvalue] = rvalue
     return new_val

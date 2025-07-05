@@ -12,11 +12,17 @@ import os
 
 import salt.config
 import salt.loader
-import salt.utils.dockermod.translate.container
-import salt.utils.dockermod.translate.network
 import salt.utils.platform
 from salt.exceptions import CommandExecutionError
-from salt.utils.dockermod.translate import helpers as translate_helpers
+
+#  pylint: disable-next=import-error,no-name-in-module
+import saltext.dockermod.utils.dockermod.translate.container
+
+#  pylint: disable-next=import-error,no-name-in-module
+import saltext.dockermod.utils.dockermod.translate.network
+
+#  pylint: disable-next=import-error,no-name-in-module
+from saltext.dockermod.utils.dockermod.translate import helpers as translate_helpers
 from tests.support.unit import TestCase
 
 log = logging.getLogger(__name__)
@@ -27,6 +33,7 @@ class Assert:
         self.translator = translator
 
     def __call__(self, func):
+        #  pylint: disable-next=attribute-defined-outside-init
         self.func = func
         return functools.wraps(func)(
             # pylint: disable=unnecessary-lambda
@@ -49,9 +56,7 @@ class Assert:
             if item is None:
                 continue
             testcase.assertEqual(
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: ",".join(data)}
-                ),
+                salt.utils.dockermod.translate_input(self.translator, **{item: ",".join(data)}),
                 testcase.apply_defaults({name: data}),
             )
             testcase.assertEqual(
@@ -61,9 +66,7 @@ class Assert:
             if name != "volumes":
                 # Test coercing to string
                 testcase.assertEqual(
-                    salt.utils.dockermod.translate_input(
-                        self.translator, **{item: ["one", 2]}
-                    ),
+                    salt.utils.dockermod.translate_input(self.translator, **{item: ["one", 2]}),
                     testcase.apply_defaults({name: ["one", "2"]}),
                 )
         if alias is not None:
@@ -141,6 +144,7 @@ class Assert:
                 )
 
 
+#  pylint: disable-next=invalid-name
 class assert_bool(Assert):
     """
     Test a boolean value
@@ -185,6 +189,7 @@ class assert_bool(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_int(Assert):
     """
     Test an integer value
@@ -199,15 +204,11 @@ class assert_int(Assert):
                 continue
             for val in (100, "100"):
                 testcase.assertEqual(
-                    salt.utils.dockermod.translate_input(
-                        self.translator, **{item: val}
-                    ),
+                    salt.utils.dockermod.translate_input(self.translator, **{item: val}),
                     testcase.apply_defaults({name: 100}),
                 )
             # Error case: non-numeric value passed
-            with testcase.assertRaisesRegex(
-                CommandExecutionError, "'foo' is not an integer"
-            ):
+            with testcase.assertRaisesRegex(CommandExecutionError, "'foo' is not an integer"):
                 salt.utils.dockermod.translate_input(self.translator, **{item: "foo"})
         if alias is not None:
             # Test collision
@@ -227,6 +228,7 @@ class assert_int(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_string(Assert):
     """
     Test that item is a string or is converted to one
@@ -252,9 +254,7 @@ class assert_string(Assert):
             if name != "working_dir":
                 # Test coercing to string
                 testcase.assertEqual(
-                    salt.utils.dockermod.translate_input(
-                        self.translator, **{item: 123}
-                    ),
+                    salt.utils.dockermod.translate_input(self.translator, **{item: 123}),
                     testcase.apply_defaults({name: "123"}),
                 )
         if alias is not None:
@@ -275,6 +275,7 @@ class assert_string(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_int_or_string(Assert):
     """
     Test an integer or string value
@@ -313,6 +314,7 @@ class assert_int_or_string(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_stringlist(Assert):
     """
     Test a comma-separated or Python list of strings
@@ -325,6 +327,7 @@ class assert_stringlist(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_dict(Assert):
     """
     Dictionaries should be untouched, dictlists should be repacked and end up
@@ -340,9 +343,7 @@ class assert_dict(Assert):
             if item is None:
                 continue
             testcase.assertEqual(
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: expected}
-                ),
+                salt.utils.dockermod.translate_input(self.translator, **{item: expected}),
                 testcase.apply_defaults({name: expected}),
             )
             # "Dictlist" input from states
@@ -353,9 +354,7 @@ class assert_dict(Assert):
                 testcase.apply_defaults({name: expected}),
             )
             # Error case: non-dictionary input
-            with testcase.assertRaisesRegex(
-                CommandExecutionError, "'foo' is not a dictionary"
-            ):
+            with testcase.assertRaisesRegex(CommandExecutionError, "'foo' is not a dictionary"):
                 salt.utils.dockermod.translate_input(self.translator, **{item: "foo"})
         if alias is not None:
             # Test collision
@@ -375,6 +374,7 @@ class assert_dict(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_cmd(Assert):
     """
     Test for a string, or a comma-separated or Python list of strings. This is
@@ -390,15 +390,11 @@ class assert_cmd(Assert):
             if item is None:
                 continue
             testcase.assertEqual(
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: "foo bar"}
-                ),
+                salt.utils.dockermod.translate_input(self.translator, **{item: "foo bar"}),
                 testcase.apply_defaults({name: "foo bar"}),
             )
             testcase.assertEqual(
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: ["foo", "bar"]}
-                ),
+                salt.utils.dockermod.translate_input(self.translator, **{item: ["foo", "bar"]}),
                 testcase.apply_defaults({name: ["foo", "bar"]}),
             )
             # Test coercing to string
@@ -407,9 +403,7 @@ class assert_cmd(Assert):
                 testcase.apply_defaults({name: "123"}),
             )
             testcase.assertEqual(
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: ["one", 2]}
-                ),
+                salt.utils.dockermod.translate_input(self.translator, **{item: ["one", 2]}),
                 testcase.apply_defaults({name: ["one", "2"]}),
             )
         if alias is not None:
@@ -430,6 +424,7 @@ class assert_cmd(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_key_colon_value(Assert):
     """
     Test a key/value pair with parameters passed as key:value pairs
@@ -442,6 +437,7 @@ class assert_key_colon_value(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_key_equals_value(Assert):
     """
     Test a key/value pair with parameters passed as key=value pairs
@@ -456,6 +452,7 @@ class assert_key_equals_value(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_labels(Assert):
     def wrap(self, testcase, *args, **kwargs):  # pylint: disable=arguments-differ
         # Strip off the "test_" from the function name
@@ -474,15 +471,12 @@ class assert_labels(Assert):
             # Error case: Passed a mutli-element dict in dictlist
             bad_labels = copy.deepcopy(labels)
             bad_labels[-1]["bad"] = "input"
-            with testcase.assertRaisesRegex(
-                CommandExecutionError, r"Invalid label\(s\)"
-            ):
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: bad_labels}
-                )
+            with testcase.assertRaisesRegex(CommandExecutionError, r"Invalid label\(s\)"):
+                salt.utils.dockermod.translate_input(self.translator, **{item: bad_labels})
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_device_rates(Assert):
     """
     Tests for device_{read,write}_{bps,iops}. The bps values have a "Rate"
@@ -504,20 +498,17 @@ class assert_device_rates(Assert):
                 CommandExecutionError,
                 "Path '{}' is not absolute".format(path.replace("\\", "\\\\")),
             ):
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: f"{path}:1048576"}
-                )
+                salt.utils.dockermod.translate_input(self.translator, **{item: f"{path}:1048576"})
 
             if name.endswith("_bps"):
                 # Both integer bytes and a string providing a shorthand for kb,
                 # mb, or gb can be used, so we need to test for both.
+                #  pylint: disable-next=unused-variable
                 expected = ({}, [])
                 vals = "/dev/sda:1048576,/dev/sdb:1048576"
                 for val in (vals, vals.split(",")):
                     testcase.assertEqual(
-                        salt.utils.dockermod.translate_input(
-                            self.translator, **{item: val}
-                        ),
+                        salt.utils.dockermod.translate_input(self.translator, **{item: val}),
                         testcase.apply_defaults(
                             {
                                 name: [
@@ -531,9 +522,7 @@ class assert_device_rates(Assert):
                 vals = "/dev/sda:1mb,/dev/sdb:5mb"
                 for val in (vals, vals.split(",")):
                     testcase.assertEqual(
-                        salt.utils.dockermod.translate_input(
-                            self.translator, **{item: val}
-                        ),
+                        salt.utils.dockermod.translate_input(self.translator, **{item: val}),
                         testcase.apply_defaults(
                             {
                                 name: [
@@ -574,9 +563,7 @@ class assert_device_rates(Assert):
                 vals = "/dev/sda:1000,/dev/sdb:500"
                 for val in (vals, vals.split(",")):
                     testcase.assertEqual(
-                        salt.utils.dockermod.translate_input(
-                            self.translator, **{item: val}
-                        ),
+                        salt.utils.dockermod.translate_input(self.translator, **{item: val}),
                         testcase.apply_defaults(
                             {
                                 name: [
@@ -598,9 +585,7 @@ class assert_device_rates(Assert):
                         CommandExecutionError,
                         "Rate '5mb' for path '/dev/sdb' is non-numeric",
                     ):
-                        salt.utils.dockermod.translate_input(
-                            self.translator, **{item: val}
-                        )
+                        salt.utils.dockermod.translate_input(self.translator, **{item: val})
 
                 if alias is not None:
                     # Test collision
@@ -630,6 +615,7 @@ class assert_device_rates(Assert):
         return self.func(testcase, *args, **kwargs)
 
 
+#  pylint: disable-next=invalid-name
 class assert_subnet(Assert):
     """
     Test an IPv4 or IPv6 subnet
@@ -730,6 +716,7 @@ class TranslateBase(TestCase):
             ret[0]["ports"] = sorted(tcp_ports) + sorted(udp_ports)
         return ret
 
+    #  pylint: disable-next=invalid-name
     def tearDown(self):
         """
         Test skip_translate kwarg
@@ -746,13 +733,15 @@ class TranslateBase(TestCase):
             )
 
 
+#  pylint: disable-next=too-many-public-methods
 class TranslateContainerInputTestCase(TranslateBase):
     """
     Tests for salt.utils.dockermod.translate_input(), invoked using
     salt.utils.dockermod.translate.container as the translator module.
     """
 
-    translator = salt.utils.dockermod.translate.container
+    #  pylint: disable-next=c-extension-no-member
+    translator = saltext.dockermod.utils.dockermod.translate.container
 
     @staticmethod
     def normalize_ports(ret):
@@ -777,7 +766,8 @@ class TranslateContainerInputTestCase(TranslateBase):
             ret["ports"] = sorted(tcp_ports) + sorted(udp_ports)
         return ret
 
-    @assert_bool(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.container)
     def test_auto_remove(self):
         """
         Should be a bool or converted to one
@@ -812,7 +802,8 @@ class TranslateContainerInputTestCase(TranslateBase):
             },
         )
 
-    @assert_int(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int(saltext.dockermod.utils.dockermod.translate.container)
     def test_blkio_weight(self):
         """
         Should be an int or converted to one
@@ -823,6 +814,7 @@ class TranslateContainerInputTestCase(TranslateBase):
         Should translate a list of PATH:WEIGHT pairs to a list of dictionaries
         with the following format: {'Path': PATH, 'Weight': WEIGHT}
         """
+        #  pylint: disable-next=unused-variable
         for val in ("/dev/sda:100,/dev/sdb:200", ["/dev/sda:100", "/dev/sdb:200"]):
             self.assertEqual(
                 salt.utils.dockermod.translate_input(
@@ -840,15 +832,11 @@ class TranslateContainerInputTestCase(TranslateBase):
         with self.assertRaisesRegex(
             CommandExecutionError, r"'foo' contains 1 value\(s\) \(expected 2\)"
         ):
-            salt.utils.dockermod.translate_input(
-                self.translator, blkio_weight_device="foo"
-            )
+            salt.utils.dockermod.translate_input(self.translator, blkio_weight_device="foo")
         with self.assertRaisesRegex(
             CommandExecutionError, r"'foo:bar:baz' contains 3 value\(s\) \(expected 2\)"
         ):
-            salt.utils.dockermod.translate_input(
-                self.translator, blkio_weight_device="foo:bar:baz"
-            )
+            salt.utils.dockermod.translate_input(self.translator, blkio_weight_device="foo:bar:baz")
         with self.assertRaisesRegex(
             CommandExecutionError, r"Weight 'foo' for path '/dev/sdb' is not an integer"
         ):
@@ -856,101 +844,117 @@ class TranslateContainerInputTestCase(TranslateBase):
                 self.translator, blkio_weight_device=["/dev/sda:100", "/dev/sdb:foo"]
             )
 
-    @assert_stringlist(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_stringlist(saltext.dockermod.utils.dockermod.translate.container)
     def test_cap_add(self):
         """
         Should be a list of strings or converted to one
         """
 
-    @assert_stringlist(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_stringlist(saltext.dockermod.utils.dockermod.translate.container)
     def test_cap_drop(self):
         """
         Should be a list of strings or converted to one
         """
 
-    @assert_cmd(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_cmd(saltext.dockermod.utils.dockermod.translate.container)
     def test_command(self):
         """
         Can either be a string or a comma-separated or Python list of strings.
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_cpuset_cpus(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_cpuset_mems(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_int(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int(saltext.dockermod.utils.dockermod.translate.container)
     def test_cpu_group(self):
         """
         Should be an int or converted to one
         """
 
-    @assert_int(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int(saltext.dockermod.utils.dockermod.translate.container)
     def test_cpu_period(self):
         """
         Should be an int or converted to one
         """
 
-    @assert_int(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int(saltext.dockermod.utils.dockermod.translate.container)
     def test_cpu_shares(self):
         """
         Should be an int or converted to one
         """
 
-    @assert_bool(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.container)
     def test_detach(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_device_rates(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_device_rates(saltext.dockermod.utils.dockermod.translate.container)
     def test_device_read_bps(self):
         """
         CLI input is a list of PATH:RATE pairs, but the API expects a list of
         dictionaries in the format [{'Path': path, 'Rate': rate}]
         """
 
-    @assert_device_rates(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_device_rates(saltext.dockermod.utils.dockermod.translate.container)
     def test_device_read_iops(self):
         """
         CLI input is a list of PATH:RATE pairs, but the API expects a list of
         dictionaries in the format [{'Path': path, 'Rate': rate}]
         """
 
-    @assert_device_rates(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_device_rates(saltext.dockermod.utils.dockermod.translate.container)
     def test_device_write_bps(self):
         """
         CLI input is a list of PATH:RATE pairs, but the API expects a list of
         dictionaries in the format [{'Path': path, 'Rate': rate}]
         """
 
-    @assert_device_rates(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_device_rates(saltext.dockermod.utils.dockermod.translate.container)
     def test_device_write_iops(self):
         """
         CLI input is a list of PATH:RATE pairs, but the API expects a list of
         dictionaries in the format [{'Path': path, 'Rate': rate}]
         """
 
-    @assert_stringlist(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_stringlist(saltext.dockermod.utils.dockermod.translate.container)
     def test_devices(self):
         """
         Should be a list of strings or converted to one
         """
 
-    @assert_stringlist(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_stringlist(saltext.dockermod.utils.dockermod.translate.container)
     def test_dns_opt(self):
         """
         Should be a list of strings or converted to one
         """
 
-    @assert_stringlist(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_stringlist(saltext.dockermod.utils.dockermod.translate.container)
     def test_dns_search(self):
         """
         Should be a list of strings or converted to one
@@ -996,19 +1000,22 @@ class TranslateContainerInputTestCase(TranslateBase):
                 {"dns": ["foo", "bar"]},
             )
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_domainname(self):
         """
         Should be a list of strings or converted to one
         """
 
-    @assert_cmd(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_cmd(saltext.dockermod.utils.dockermod.translate.container)
     def test_entrypoint(self):
         """
         Can either be a string or a comma-separated or Python list of strings.
         """
 
-    @assert_key_equals_value(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_key_equals_value(saltext.dockermod.utils.dockermod.translate.container)
     def test_environment(self):
         """
         Can be passed in several formats but must end up as a dictionary
@@ -1057,38 +1064,44 @@ class TranslateContainerInputTestCase(TranslateBase):
                 {"extra_hosts": {"foo": "bar", "baz": "qux"}},
             )
 
-    @assert_stringlist(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_stringlist(saltext.dockermod.utils.dockermod.translate.container)
     def test_group_add(self):
         """
         Should be a list of strings or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_hostname(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_ipc_mode(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_isolation(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_labels(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_labels(saltext.dockermod.utils.dockermod.translate.container)
     def test_labels(self):
         """
         Can be passed as a list of key=value pairs or a dictionary, and must
         ultimately end up as a dictionary.
         """
 
-    @assert_key_colon_value(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_key_colon_value(saltext.dockermod.utils.dockermod.translate.container)
     def test_links(self):
         """
         Can be passed as a list of key:value pairs or a dictionary, and must
@@ -1103,11 +1116,13 @@ class TranslateContainerInputTestCase(TranslateBase):
         log_driver is a simple string, but log_opt can be passed in several
         ways, so we need to test them all.
         """
+        #  pylint: disable-next=unused-variable
         expected = (
             {"log_config": {"Type": "foo", "Config": {"foo": "bar", "baz": "qux"}}},
             {},
             [],
         )
+        #  pylint: disable-next=unused-variable
         for val in (
             "foo=bar,baz=qux",
             ["foo=bar", "baz=qux"],
@@ -1133,74 +1148,86 @@ class TranslateContainerInputTestCase(TranslateBase):
             {"log_config": {"Type": "none", "Config": {"foo": "bar", "baz": "qux"}}},
         )
 
-    @assert_key_equals_value(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_key_equals_value(saltext.dockermod.utils.dockermod.translate.container)
     def test_lxc_conf(self):
         """
         Can be passed as a list of key=value pairs or a dictionary, and must
         ultimately end up as a dictionary.
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_mac_address(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_int_or_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int_or_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_mem_limit(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_int(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int(saltext.dockermod.utils.dockermod.translate.container)
     def test_mem_swappiness(self):
         """
         Should be an int or converted to one
         """
 
-    @assert_int_or_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int_or_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_memswap_limit(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_name(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_bool(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.container)
     def test_network_disabled(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_network_mode(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_bool(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.container)
     def test_oom_kill_disable(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_int(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int(saltext.dockermod.utils.dockermod.translate.container)
     def test_oom_score_adj(self):
         """
         Should be an int or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_pid_mode(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_int(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int(saltext.dockermod.utils.dockermod.translate.container)
     def test_pids_limit(self):
         """
         Should be an int or converted to one
@@ -1489,9 +1516,7 @@ class TranslateContainerInputTestCase(TranslateBase):
             "Empty container port in port binding definition '1111:'",
         ):
             salt.utils.dockermod.translate_input(self.translator, port_bindings="1111:")
-        with self.assertRaisesRegex(
-            CommandExecutionError, "Empty port binding definition found"
-        ):
+        with self.assertRaisesRegex(CommandExecutionError, "Empty port binding definition found"):
             salt.utils.dockermod.translate_input(self.translator, port_bindings="")
 
     def test_ports(self):
@@ -1531,27 +1556,30 @@ class TranslateContainerInputTestCase(TranslateBase):
         # Error case: port range start is greater than end
         with self.assertRaisesRegex(
             CommandExecutionError,
-            r"Start of port range \(5555\) cannot be greater than end of "
-            r"port range \(5554\)",
+            #  pylint: disable-next=implicit-str-concat
+            r"Start of port range \(5555\) cannot be greater than end of " r"port range \(5554\)",
         ):
             salt.utils.dockermod.translate_input(
                 self.translator,
                 ports="5555-5554",
             )
 
-    @assert_bool(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.container)
     def test_privileged(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_bool(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.container)
     def test_publish_all_ports(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_bool(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.container)
     def test_read_only(self):
         """
         Should be a bool or converted to one
@@ -1567,25 +1595,17 @@ class TranslateContainerInputTestCase(TranslateBase):
         for item in (name, alias):
             # Test with retry count
             self.assertEqual(
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: "on-failure:5"}
-                ),
+                salt.utils.dockermod.translate_input(self.translator, **{item: "on-failure:5"}),
                 {name: {"Name": "on-failure", "MaximumRetryCount": 5}},
             )
             # Test without retry count
             self.assertEqual(
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: "on-failure"}
-                ),
+                salt.utils.dockermod.translate_input(self.translator, **{item: "on-failure"}),
                 {name: {"Name": "on-failure", "MaximumRetryCount": 0}},
             )
             # Error case: more than one policy passed
-            with self.assertRaisesRegex(
-                CommandExecutionError, "Only one policy is permitted"
-            ):
-                salt.utils.dockermod.translate_input(
-                    self.translator, **{item: "on-failure,always"}
-                )
+            with self.assertRaisesRegex(CommandExecutionError, "Only one policy is permitted"):
+                salt.utils.dockermod.translate_input(self.translator, **{item: "on-failure,always"})
 
         # Test collision
         test_kwargs = {name: "on-failure:5", alias: "always"}
@@ -1602,58 +1622,67 @@ class TranslateContainerInputTestCase(TranslateBase):
                 self.translator, ignore_collisions=False, **test_kwargs
             )
 
-    @assert_stringlist(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_stringlist(saltext.dockermod.utils.dockermod.translate.container)
     def test_security_opt(self):
         """
         Should be a list of strings or converted to one
         """
 
-    @assert_int_or_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int_or_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_shm_size(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_bool(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.container)
     def test_stdin_open(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_stop_signal(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_int(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_int(saltext.dockermod.utils.dockermod.translate.container)
     def test_stop_timeout(self):
         """
         Should be an int or converted to one
         """
 
-    @assert_key_equals_value(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_key_equals_value(saltext.dockermod.utils.dockermod.translate.container)
     def test_storage_opt(self):
         """
         Can be passed in several formats but must end up as a dictionary
         mapping keys to values
         """
 
-    @assert_key_equals_value(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_key_equals_value(saltext.dockermod.utils.dockermod.translate.container)
     def test_sysctls(self):
         """
         Can be passed in several formats but must end up as a dictionary
         mapping keys to values
         """
 
-    @assert_dict(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_dict(saltext.dockermod.utils.dockermod.translate.container)
     def test_tmpfs(self):
         """
         Can be passed in several formats but must end up as a dictionary
         mapping keys to values
         """
 
-    @assert_bool(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.container)
     def test_tty(self):
         """
         Should be a bool or converted to one
@@ -1687,18 +1716,14 @@ class TranslateContainerInputTestCase(TranslateBase):
             r"Ulimit definition 'nofile:1024:2048' is not in the format "
             r"type=soft_limit\[:hard_limit\]",
         ):
-            salt.utils.dockermod.translate_input(
-                self.translator, ulimits="nofile:1024:2048"
-            )
+            salt.utils.dockermod.translate_input(self.translator, ulimits="nofile:1024:2048")
 
         # Error case: Invalid format
         with self.assertRaisesRegex(
             CommandExecutionError,
             r"Limit 'nofile=foo:2048' contains non-numeric value\(s\)",
         ):
-            salt.utils.dockermod.translate_input(
-                self.translator, ulimits="nofile=foo:2048"
-            )
+            salt.utils.dockermod.translate_input(self.translator, ulimits="nofile=foo:2048")
 
     def test_user(self):
         """
@@ -1717,28 +1742,29 @@ class TranslateContainerInputTestCase(TranslateBase):
             )
 
         # Error case: non string/int passed
-        with self.assertRaisesRegex(
-            CommandExecutionError, "Value must be a username or uid"
-        ):
+        with self.assertRaisesRegex(CommandExecutionError, "Value must be a username or uid"):
             salt.utils.dockermod.translate_input(self.translator, user=["foo"])
 
         # Error case: negative int passed
         with self.assertRaisesRegex(CommandExecutionError, "'-1' is an invalid uid"):
             salt.utils.dockermod.translate_input(self.translator, user=-1)
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_userns_mode(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_volume_driver(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_stringlist(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_stringlist(saltext.dockermod.utils.dockermod.translate.container)
     def test_volumes(self):
         """
         Should be a list of absolute paths
@@ -1751,13 +1777,15 @@ class TranslateContainerInputTestCase(TranslateBase):
         ):
             salt.utils.dockermod.translate_input(self.translator, volumes=path)
 
-    @assert_stringlist(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_stringlist(saltext.dockermod.utils.dockermod.translate.container)
     def test_volumes_from(self):
         """
         Should be a list of strings or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.container)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.container)
     def test_working_dir(self):
         """
         Should be a single absolute path
@@ -1777,76 +1805,88 @@ class TranslateNetworkInputTestCase(TranslateBase):
     salt.utils.dockermod.translate.network as the translator module.
     """
 
-    translator = salt.utils.dockermod.translate.network
+    #  pylint: disable-next=c-extension-no-member
+    translator = saltext.dockermod.utils.dockermod.translate.network
 
     ip_addrs = {
         True: ("10.1.2.3", "::1"),
         False: ("FOO", "0.9.800.1000", "feaz::1", "aj01::feac"),
     }
 
-    @assert_string(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.network)
     def test_driver(self):
         """
         Should be a string or converted to one
         """
 
-    @assert_key_equals_value(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_key_equals_value(saltext.dockermod.utils.dockermod.translate.network)
     def test_options(self):
         """
         Can be passed in several formats but must end up as a dictionary
         mapping keys to values
         """
 
-    @assert_dict(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_dict(saltext.dockermod.utils.dockermod.translate.network)
     def test_ipam(self):
         """
         Must be a dict
         """
 
-    @assert_bool(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.network)
     def test_check_duplicate(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_bool(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.network)
     def test_internal(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_labels(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_labels(saltext.dockermod.utils.dockermod.translate.network)
     def test_labels(self):
         """
         Can be passed as a list of key=value pairs or a dictionary, and must
         ultimately end up as a dictionary.
         """
 
-    @assert_bool(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.network)
     def test_enable_ipv6(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_bool(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.network)
     def test_attachable(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_bool(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_bool(saltext.dockermod.utils.dockermod.translate.network)
     def test_ingress(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_string(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_string(saltext.dockermod.utils.dockermod.translate.network)
     def test_ipam_driver(self):
         """
         Should be a bool or converted to one
         """
 
-    @assert_key_equals_value(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_key_equals_value(saltext.dockermod.utils.dockermod.translate.network)
     def test_ipam_opts(self):
         """
         Can be passed in several formats but must end up as a dictionary
@@ -1917,13 +1957,15 @@ class TranslateNetworkInputTestCase(TranslateBase):
                     self.translator, ipam_pools=[good_pool, bad_pool]
                 )
 
-    @assert_subnet(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_subnet(saltext.dockermod.utils.dockermod.translate.network)
     def test_subnet(self):
         """
         Must be an IPv4 or IPv6 subnet
         """
 
-    @assert_subnet(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_subnet(saltext.dockermod.utils.dockermod.translate.network)
     def test_iprange(self):
         """
         Must be an IPv4 or IPv6 subnet
@@ -1958,12 +2000,11 @@ class TranslateNetworkInputTestCase(TranslateBase):
                     validate_ip_addrs=False,
                     gateway=val,
                 ),
-                self.apply_defaults(
-                    {"gateway": val if isinstance(val, str) else str(val)}
-                ),
+                self.apply_defaults({"gateway": val if isinstance(val, str) else str(val)}),
             )
 
-    @assert_key_equals_value(salt.utils.dockermod.translate.network)
+    #  pylint: disable-next=c-extension-no-member
+    @assert_key_equals_value(saltext.dockermod.utils.dockermod.translate.network)
     def test_aux_addresses(self):
         """
         Must be a mapping of hostnames to IP addresses
@@ -2042,8 +2083,8 @@ class DockerTranslateHelperTestCase(TestCase):
         # Error case: port range start is greater than end
         with self.assertRaisesRegex(
             ValueError,
-            r"Start of port range \(2222\) cannot be greater than end of "
-            r"port range \(2221\)",
+            #  pylint: disable-next=implicit-str-concat
+            r"Start of port range \(2222\) cannot be greater than end of " r"port range \(2221\)",
         ):
             translate_helpers.get_port_range("2222-2221")
         # Error case: non-numeric input

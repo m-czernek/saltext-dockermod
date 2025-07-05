@@ -2,6 +2,8 @@
 Functions to translate input for network creation
 """
 
+# pylint: disable=import-error
+
 from salt.exceptions import SaltInvocationError
 
 from . import helpers
@@ -22,13 +24,12 @@ ALIASES_REVMAP = {y: x for x, y in ALIASES.items()}
 DEFAULTS = {"check_duplicate": True}
 
 
-def _post_processing(
-    kwargs, skip_translate, invalid
-):  # pylint: disable=unused-argument
+def _post_processing(kwargs, skip_translate, invalid):  # pylint: disable=unused-argument
     """
     Additional network-specific post-translation processing
     """
     # If any defaults were not expicitly passed, add them
+    #  pylint: disable-next=consider-using-dict-items
     for item in DEFAULTS:
         if item not in kwargs:
             kwargs[item] = DEFAULTS[item]

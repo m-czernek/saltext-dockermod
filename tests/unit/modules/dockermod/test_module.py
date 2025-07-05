@@ -3,15 +3,20 @@ Unit tests for the docker module
 """
 
 import logging
+from unittest.mock import MagicMock
+from unittest.mock import Mock
+from unittest.mock import call
+from unittest.mock import patch
 
 import pytest
-
 import salt.loader
-import salt.modules.dockermod as docker_mod
 import salt.utils.platform
 import salt.utils.versions
-from salt.exceptions import CommandExecutionError, SaltInvocationError
-from tests.support.mock import MagicMock, Mock, call, patch
+from salt.exceptions import CommandExecutionError
+from salt.exceptions import SaltInvocationError
+
+#  pylint: disable-next=import-error,no-name-in-module
+import saltext.dockermod.modules.dockermod as docker_mod
 
 log = logging.getLogger(__name__)
 
@@ -45,6 +50,9 @@ def configure_loader_modules(minion_opts):
             "__utils__": utils,
         }
     }
+
+
+setattr(configure_loader_modules, "_pytestfixturefunction", True)
 
 
 def test_failed_login():
@@ -318,11 +326,13 @@ def test_update_mine():
     Test the docker.update_mine config option
     """
 
+    #  pylint: disable-next=unused-argument
     def config_get_disabled(val, default):
         if val == "docker.update_mine":
             return False
         return docker_mod.NOTSET
 
+    #  pylint: disable-next=unused-argument
     def config_get_enabled(val, default):
         if val == "docker.update_mine":
             return True
@@ -334,15 +344,19 @@ def test_update_mine():
         "config.option": MagicMock(return_value=False),
         "mine.send": mine_mock,
     }
-    with patch.dict(docker_mod.__salt__, dunder_salt), patch.dict(
-        docker_mod.__context__, {"docker.client": Mock()}
-    ), patch.object(docker_mod, "state", MagicMock(return_value="stopped")):
+    with (
+        patch.dict(docker_mod.__salt__, dunder_salt),
+        patch.dict(docker_mod.__context__, {"docker.client": Mock()}),
+        patch.object(docker_mod, "state", MagicMock(return_value="stopped")),
+    ):
         docker_mod.stop("foo", timeout=1)
         mine_mock.assert_not_called()
 
-    with patch.dict(docker_mod.__salt__, dunder_salt), patch.dict(
-        docker_mod.__context__, {"docker.client": Mock()}
-    ), patch.object(docker_mod, "state", MagicMock(return_value="stopped")):
+    with (
+        patch.dict(docker_mod.__salt__, dunder_salt),
+        patch.dict(docker_mod.__context__, {"docker.client": Mock()}),
+        patch.object(docker_mod, "state", MagicMock(return_value="stopped")),
+    ):
         dunder_salt["config.get"].side_effect = config_get_enabled
         dunder_salt["config.option"].return_value = True
         docker_mod.stop("foo", timeout=1)
@@ -360,9 +374,7 @@ def test_list_networks():
     }
     client = Mock()
     client.api_version = "1.21"
-    client.networks = Mock(
-        return_value=[{"Name": "foo", "Id": "01234", "Containers": {}}]
-    )
+    client.networks = Mock(return_value=[{"Name": "foo", "Id": "01234", "Containers": {}}])
     get_client_mock = MagicMock(return_value=client)
     with patch.dict(docker_mod.__dict__, {"__salt__": __salt__}):
         with patch.object(docker_mod, "_get_client", get_client_mock):
@@ -685,9 +697,7 @@ def test_wait_fails_on_exit_status_and_already_stopped():
     with patch.object(docker_mod, "inspect_container", docker_inspect_container):
         with patch.object(docker_mod, "_get_client", get_client_mock):
             docker_mod._clear_context()
-            result = docker_mod.wait(
-                "foo", ignore_already_stopped=True, fail_on_exit_status=True
-            )
+            result = docker_mod.wait("foo", ignore_already_stopped=True, fail_on_exit_status=True)
     assert result == {
         "result": False,
         "comment": "Container 'foo' already stopped",
@@ -706,9 +716,7 @@ def test_sls_build():
         return_value={"state": {"old": "running", "new": "stopped"}, "result": True}
     )
     docker_rm_mock = MagicMock(return_value={})
-    docker_commit_mock = MagicMock(
-        return_value={"Id": "ID2", "Image": "foo", "Time_Elapsed": 42}
-    )
+    docker_commit_mock = MagicMock(return_value={"Id": "ID2", "Image": "foo", "Time_Elapsed": 42})
 
     docker_sls_mock = MagicMock(
         return_value={
@@ -734,14 +742,13 @@ def test_sls_build():
     )
 
     ret = None
-    with patch.object(docker_mod, "start_", docker_start_mock), patch.object(
-        docker_mod, "create", docker_create_mock
-    ), patch.object(docker_mod, "stop", docker_stop_mock), patch.object(
-        docker_mod, "commit", docker_commit_mock
-    ), patch.object(
-        docker_mod, "sls", docker_sls_mock
-    ), patch.object(
-        docker_mod, "rm_", docker_rm_mock
+    with (
+        patch.object(docker_mod, "start_", docker_start_mock),
+        patch.object(docker_mod, "create", docker_create_mock),
+        patch.object(docker_mod, "stop", docker_stop_mock),
+        patch.object(docker_mod, "commit", docker_commit_mock),
+        patch.object(docker_mod, "sls", docker_sls_mock),
+        patch.object(docker_mod, "rm_", docker_rm_mock),
     ):
         ret = docker_mod.sls_build("foo", mods="foo")
     docker_create_mock.assert_called_once_with(
@@ -790,12 +797,12 @@ def test_sls_build_dryrun():
     )
 
     ret = None
-    with patch.object(docker_mod, "start_", docker_start_mock), patch.object(
-        docker_mod, "create", docker_create_mock
-    ), patch.object(docker_mod, "stop", docker_stop_mock), patch.object(
-        docker_mod, "rm_", docker_rm_mock
-    ), patch.object(
-        docker_mod, "sls", docker_sls_mock
+    with (
+        patch.object(docker_mod, "start_", docker_start_mock),
+        patch.object(docker_mod, "create", docker_create_mock),
+        patch.object(docker_mod, "stop", docker_stop_mock),
+        patch.object(docker_mod, "rm_", docker_rm_mock),
+        patch.object(docker_mod, "sls", docker_sls_mock),
     ):
         ret = docker_mod.sls_build("foo", mods="foo", dryrun=True)
     docker_create_mock.assert_called_once_with(
@@ -849,16 +856,16 @@ def test_call_success():
     context = {"docker.exec_driver": "docker-exec"}
     salt_dunder = {"config.option": docker_config_mock}
 
-    with patch.object(docker_mod, "run_all", docker_run_all_mock), patch.object(
-        docker_mod, "copy_to", docker_copy_to_mock
-    ), patch.object(docker_mod, "_get_client", get_client_mock), patch.dict(
-        docker_mod.__opts__, {"cachedir": "/tmp"}
-    ), patch.dict(
-        docker_mod.__salt__, salt_dunder
-    ), patch.dict(
-        docker_mod.__context__, context
+    with (
+        patch.object(docker_mod, "run_all", docker_run_all_mock),
+        patch.object(docker_mod, "copy_to", docker_copy_to_mock),
+        patch.object(docker_mod, "_get_client", get_client_mock),
+        patch.dict(docker_mod.__opts__, {"cachedir": "/tmp"}),
+        patch.dict(docker_mod.__salt__, salt_dunder),
+        patch.dict(docker_mod.__context__, context),
     ):
         # call twice to verify tmp path later
+        #  pylint: disable-next=unused-variable
         for i in range(2):
             ret = docker_mod.call("ID", "test.arg", 1, 2, arg1="val1")
 
@@ -866,35 +873,23 @@ def test_call_success():
     # [ call(name, [args]), ...
     assert "mkdir" in docker_run_all_mock.mock_calls[0][1][1]
     assert "mkdir" in docker_run_all_mock.mock_calls[5][1][1]
-    assert (
-        docker_run_all_mock.mock_calls[0][1][1]
-        != docker_run_all_mock.mock_calls[5][1][1]
-    )
+    assert docker_run_all_mock.mock_calls[0][1][1] != docker_run_all_mock.mock_calls[5][1][1]
 
     assert "python3 --version" == docker_run_all_mock.mock_calls[1][1][1]
 
     assert "salt-call" in docker_run_all_mock.mock_calls[3][1][1]
     assert "salt-call" in docker_run_all_mock.mock_calls[8][1][1]
-    assert (
-        docker_run_all_mock.mock_calls[3][1][1]
-        != docker_run_all_mock.mock_calls[8][1][1]
-    )
+    assert docker_run_all_mock.mock_calls[3][1][1] != docker_run_all_mock.mock_calls[8][1][1]
 
     # check thin untar
     assert "tarfile" in docker_run_all_mock.mock_calls[2][1][1]
     assert "tarfile" in docker_run_all_mock.mock_calls[7][1][1]
-    assert (
-        docker_run_all_mock.mock_calls[2][1][1]
-        != docker_run_all_mock.mock_calls[7][1][1]
-    )
+    assert docker_run_all_mock.mock_calls[2][1][1] != docker_run_all_mock.mock_calls[7][1][1]
 
     # check directory cleanup
     assert "rm -rf" in docker_run_all_mock.mock_calls[4][1][1]
     assert "rm -rf" in docker_run_all_mock.mock_calls[9][1][1]
-    assert (
-        docker_run_all_mock.mock_calls[4][1][1]
-        != docker_run_all_mock.mock_calls[9][1][1]
-    )
+    assert docker_run_all_mock.mock_calls[4][1][1] != docker_run_all_mock.mock_calls[9][1][1]
 
     assert {"retcode": 0, "comment": "container cmd"} == ret
 
@@ -947,7 +942,7 @@ def test_compare_container_image_id_resolution():
     with patch.object(docker_mod, "inspect_container", inspect_container_mock):
         with patch.object(docker_mod, "inspect_image", inspect_image_mock):
             ret = docker_mod.compare_containers("container1", "container2")
-            assert ret == {}
+            assert not ret
 
 
 def test_compare_container_ulimits_order():
@@ -1095,9 +1090,7 @@ def test_prune():
 
     # Volumes only, with filters
     client = _run(system=False, volumes=True, label="foo,bar=baz")
-    client.assert_called_once_with(
-        "prune_volumes", filters={"label": ["foo", "bar=baz"]}
-    )
+    client.assert_called_once_with("prune_volumes", filters={"label": ["foo", "bar=baz"]})
 
     # Containers and images, no filters
     client = _run(containers=True, images=True)
@@ -1267,11 +1260,10 @@ def test_port():
         },
     }
     list_mock = MagicMock(return_value=["bar", "baz", "foo"])
-    inspect_mock = MagicMock(
-        side_effect=lambda x: {"NetworkSettings": {"Ports": ports.get(x)}}
-    )
-    with patch.object(docker_mod, "list_containers", list_mock), patch.object(
-        docker_mod, "inspect_container", inspect_mock
+    inspect_mock = MagicMock(side_effect=lambda x: {"NetworkSettings": {"Ports": ports.get(x)}})
+    with (
+        patch.object(docker_mod, "list_containers", list_mock),
+        patch.object(docker_mod, "inspect_container", inspect_mock),
     ):
 
         # Test with specific container name

@@ -2,6 +2,8 @@
 Functions to translate input for container creation
 """
 
+# pylint: disable=import-error,no-name-in-module
+
 import os
 
 from salt.exceptions import SaltInvocationError
@@ -115,6 +117,7 @@ def _post_processing(kwargs, skip_translate, invalid):
         for index, _ in enumerate(kwargs["ports"]):
             try:
                 if kwargs["ports"][index][1] == "tcp":
+                    #  pylint: disable-next=unsubscriptable-object
                     kwargs["ports"][index] = ports_to_open[index][0]
             except TypeError:
                 continue
@@ -136,6 +139,7 @@ def binds(val, **kwargs):  # pylint: disable=unused-argument
             try:
                 val = helpers.split(val)
             except AttributeError:
+                #  pylint: disable-next=raise-missing-from
                 raise SaltInvocationError(
                     f"'{val}' is not a dictionary or list of bind definitions"
                 )
@@ -156,6 +160,7 @@ def blkio_weight_device(val, **kwargs):  # pylint: disable=unused-argument
         try:
             item["Weight"] = int(item["Weight"])
         except (TypeError, ValueError):
+            #  pylint: disable-next=raise-missing-from
             raise SaltInvocationError(
                 "Weight '{Weight}' for path '{Path}' is not an integer".format(**item)
             )
@@ -378,29 +383,26 @@ def port_bindings(val, **kwargs):
                 try:
                     start, end = helpers.get_port_range(container_port)
                 except ValueError as exc:
+                    #  pylint: disable-next=raise-missing-from
                     raise SaltInvocationError(str(exc))
                 bind_vals = [
-                    (_format_port(port_num, proto), None)
-                    for port_num in range(start, end + 1)
+                    (_format_port(port_num, proto), None) for port_num in range(start, end + 1)
                 ]
             elif num_bind_parts == 2:
                 if bind_parts[0] == "":
                     raise SaltInvocationError(
-                        "Empty host port in port binding definition '{}'".format(
-                            binding
-                        )
+                        f"Empty host port in port binding definition '{binding}'"
                     )
                 if bind_parts[1] == "":
                     raise SaltInvocationError(
-                        "Empty container port in port binding definition '{}'".format(
-                            binding
-                        )
+                        f"Empty container port in port binding definition '{binding}'"
                     )
                 container_port, _, proto = bind_parts[1].partition("/")
                 try:
                     cport_start, cport_end = helpers.get_port_range(container_port)
                     hport_start, hport_end = helpers.get_port_range(bind_parts[0])
                 except ValueError as exc:
+                    #  pylint: disable-next=raise-missing-from
                     raise SaltInvocationError(str(exc))
                 if (hport_end - hport_start) != (cport_end - cport_start):
                     # Port range is mismatched
@@ -423,6 +425,7 @@ def port_bindings(val, **kwargs):
                 try:
                     cport_start, cport_end = helpers.get_port_range(container_port)
                 except ValueError as exc:
+                    #  pylint: disable-next=raise-missing-from
                     raise SaltInvocationError(str(exc))
                 cport_list = list(range(cport_start, cport_end + 1))
                 if host_port == "":
@@ -431,6 +434,7 @@ def port_bindings(val, **kwargs):
                     try:
                         hport_start, hport_end = helpers.get_port_range(host_port)
                     except ValueError as exc:
+                        #  pylint: disable-next=raise-missing-from
                         raise SaltInvocationError(str(exc))
                     hport_list = list(range(hport_start, hport_end + 1))
 
@@ -445,20 +449,14 @@ def port_bindings(val, **kwargs):
                 bind_vals = [
                     (
                         _format_port(val, proto),
-                        (
-                            (host_ip,)
-                            if hport_list[idx] is None
-                            else (host_ip, hport_list[idx])
-                        ),
+                        ((host_ip,) if hport_list[idx] is None else (host_ip, hport_list[idx])),
                     )
                     for idx, val in enumerate(cport_list)
                 ]
             else:
                 raise SaltInvocationError(
                     "'{}' is an invalid port binding definition (at most "
-                    "3 components are allowed, found {})".format(
-                        binding, num_bind_parts
-                    )
+                    "3 components are allowed, found {})".format(binding, num_bind_parts)
                 )
 
             for cport, bind_def in bind_vals:
@@ -503,6 +501,7 @@ def ports(val, **kwargs):  # pylint: disable=unused-argument
             if isinstance(val, int):
                 val = [val]
             else:
+                #  pylint: disable-next=raise-missing-from
                 raise SaltInvocationError(f"'{val}' is not a valid port definition")
     new_ports = set()
     for item in val:
@@ -512,10 +511,12 @@ def ports(val, **kwargs):  # pylint: disable=unused-argument
         try:
             item, _, proto = item.partition("/")
         except AttributeError:
+            #  pylint: disable-next=raise-missing-from
             raise SaltInvocationError(f"'{item}' is not a valid port definition")
         try:
             range_start, range_end = helpers.get_port_range(item)
         except ValueError as exc:
+            #  pylint: disable-next=raise-missing-from
             raise SaltInvocationError(str(exc))
         new_ports.update(
             [helpers.get_port_def(x, proto) for x in range(range_start, range_end + 1)]
@@ -556,6 +557,7 @@ def restart_policy(val, **kwargs):  # pylint: disable=unused-argument
         val["MaximumRetryCount"] = int(val["MaximumRetryCount"])
     except (TypeError, ValueError):
         # Non-numeric retry count passed
+        #  pylint: disable-next=raise-missing-from
         raise SaltInvocationError(
             "Retry count '{}' is non-numeric".format(val["MaximumRetryCount"])
         )
@@ -606,6 +608,7 @@ def ulimits(val, **kwargs):  # pylint: disable=unused-argument
                 ulimit_name, limits = helpers.split(item, "=", 1)
                 comps = helpers.split(limits, ":", 1)
             except (AttributeError, ValueError):
+                #  pylint: disable-next=raise-missing-from
                 raise SaltInvocationError(
                     "Ulimit definition '{}' is not in the format "
                     "type=soft_limit[:hard_limit]".format(item)
@@ -620,9 +623,8 @@ def ulimits(val, **kwargs):  # pylint: disable=unused-argument
                     "Hard": int(hard_limit),
                 }
             except (TypeError, ValueError):
-                raise SaltInvocationError(
-                    f"Limit '{item}' contains non-numeric value(s)"
-                )
+                #  pylint: disable-next=raise-missing-from
+                raise SaltInvocationError(f"Limit '{item}' contains non-numeric value(s)")
     return val
 
 
@@ -640,6 +642,7 @@ def user(val, **kwargs):  # pylint: disable=unused-argument
             val = int(val)
         except (TypeError, ValueError):
             pass
+    #  pylint: disable-next=no-else-raise
     if not isinstance(val, (int, str)):
         raise SaltInvocationError("Value must be a username or uid")
     elif isinstance(val, int) and val < 0:

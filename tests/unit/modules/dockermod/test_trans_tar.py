@@ -1,9 +1,11 @@
 import logging
+from unittest.mock import MagicMock
+from unittest.mock import patch
 
 import pytest
 
-import salt.modules.dockermod as docker_mod
-from tests.support.mock import MagicMock, patch
+#  pylint: disable-next=import-error,no-name-in-module
+import saltext.dockermod.modules.dockermod as docker_mod
 
 log = logging.getLogger(__name__)
 
@@ -26,9 +28,18 @@ def configure_loader_modules():
                 "config.option": MagicMock(return_value=None),
                 "cmd.run": fake_run,
             },
-            "__opts__": {"id": "dockermod-unit-test"},
+            "__opts__": {
+                "id": "dockermod-unit-test",
+                "lock_saltenv": False,
+                "pillarenv": "base",
+                "grains": {},
+                "pillar": {},
+            },
         },
     }
+
+
+setattr(configure_loader_modules, "_pytestfixturefunction", True)
 
 
 def fake_run(*args, **kwargs):
@@ -49,21 +60,21 @@ def test_trans_tar_should_have_grains_in_sls_opts_including_pillar_override():
     extra_pillar_data = {"some": "extras"}
     fake_trans_tar = MagicMock(return_value=b"hi")
     patch_trans_tar = patch(
-        "salt.modules.dockermod._prepare_trans_tar",
+        "saltext.dockermod.modules.dockermod._prepare_trans_tar",
         fake_trans_tar,
     )
     patch_call = patch(
-        "salt.modules.dockermod.call",
+        "saltext.dockermod.modules.dockermod.call",
         MagicMock(return_value=expected_grains),
     )
     fake_get_pillar = MagicMock()
     fake_get_pillar.compile_pillar.return_value = expected_pillars
     patch_pillar = patch(
-        "salt.modules.dockermod.salt.pillar.get_pillar",
+        "saltext.dockermod.modules.dockermod.salt.pillar.get_pillar",
         MagicMock(return_value=fake_get_pillar),
     )
     patch_run_all = patch(
-        "salt.modules.dockermod.run_all",
+        "saltext.dockermod.modules.dockermod.run_all",
         MagicMock(return_value={"retcode": 1, "stderr": "early exit test"}),
     )
     with patch_trans_tar, patch_call, patch_pillar, patch_run_all:
